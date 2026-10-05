@@ -2,33 +2,44 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
+#define NUM_WORKERS 3
+
 int main() {
 
-    printf("Supervisor started. PID: %d\n", getpid());
+    pid_t workers[NUM_WORKERS];
 
-    pid_t pid = fork();
+    printf("Supervisor started. PID: %d\n\n", getpid());
 
-    if (pid < 0) {
-        perror("fork failed");
-        return 1;
+    for (int i = 0; i < NUM_WORKERS; i++) {
+
+        pid_t pid = fork();
+
+        if (pid < 0) {
+            perror("fork failed");
+            return 1;
+        }
+
+        if (pid == 0) {
+
+            printf("Starting Worker %d...\n", i + 1);
+
+            execl("./worker", "worker", NULL);
+
+            perror("exec failed");
+            return 1;
+        }
+
+        workers[i] = pid;
+
+        printf("Worker %d created - PID: %d\n",
+               i + 1, workers[i]);
     }
 
-    if (pid == 0) {
+    printf("\nAll workers created.\n");
+    printf("Supervisor is monitoring the workers.\n\n");
 
-        printf("Starting worker process...\n");
-
-        execl("./worker", "worker", NULL);
-
-        perror("exec failed");
-        return 1;
-    }
-    else {
-
-        printf("Worker process created. PID: %d\n", pid);
-
+    while (1) {
         wait(NULL);
-
-        printf("Worker process finished.\n");
     }
 
     return 0;
