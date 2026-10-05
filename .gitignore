@@ -2,5 +2,5 @@
 *.o
 supervisor
 worker
-*.log
+
 

@@ -10,13 +10,30 @@ struct Worker {
     int active;
 };
 
+void log_event(const char *message, int worker_id, pid_t pid) {
+
+    FILE *log = fopen("supervisor.log", "a");
+
+    if (log == NULL) {
+        perror("Could not open log file");
+        return;
+    }
+
+    fprintf(log, "%s | Worker %d | PID %d\n",
+            message,
+            worker_id,
+            pid);
+
+    fclose(log);
+}
+
 int main() {
 
     struct Worker workers[NUM_WORKERS];
 
     printf("Supervisor started. PID: %d\n\n", getpid());
 
-    // Create the initial workers
+    // Create initial workers
     for (int i = 0; i < NUM_WORKERS; i++) {
 
         workers[i].id = i + 1;
@@ -47,7 +64,6 @@ int main() {
                workers[i].pid);
     }
 
-    // Display current worker status
     printf("\nCurrent Worker Status:\n");
 
     for (int i = 0; i < NUM_WORKERS; i++) {
@@ -64,7 +80,6 @@ int main() {
 
         int status;
 
-        // Wait for any worker to terminate
         pid_t terminated_pid = waitpid(-1, &status, 0);
 
         if (terminated_pid < 0) {
@@ -84,12 +99,14 @@ int main() {
         }
 
         if (worker_index == -1) {
+
             printf("Unknown worker terminated. PID: %d\n",
                    terminated_pid);
+
             continue;
         }
 
-        // Mark the worker as inactive
+        // Mark worker as inactive
         workers[worker_index].active = 0;
 
         printf("\nWorker %d with PID %d terminated.\n",
@@ -98,13 +115,21 @@ int main() {
 
         printf("Failure detected.\n");
 
-        // Create replacement worker
+        // Log the failure
+        log_event("TERMINATED",
+                  workers[worker_index].id,
+                  terminated_pid);
+
+        printf("Failure logged.\n");
+
+        // Create replacement
         printf("Creating replacement for Worker %d...\n",
                workers[worker_index].id);
 
         pid_t replacement_pid = fork();
 
         if (replacement_pid < 0) {
+
             perror("fork failed while creating replacement");
             continue;
         }
@@ -120,7 +145,7 @@ int main() {
             return 1;
         }
 
-        // Update worker information with new PID
+        // Update worker information
         workers[worker_index].pid = replacement_pid;
         workers[worker_index].active = 1;
 
@@ -130,6 +155,13 @@ int main() {
 
         printf("Worker %d is now RUNNING again.\n",
                workers[worker_index].id);
+
+        // Log the successful restart
+        log_event("RESTARTED",
+                  workers[worker_index].id,
+                  replacement_pid);
+
+        printf("Restart logged.\n");
 
         printf("Supervisor continues monitoring...\n\n");
     }
