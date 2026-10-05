@@ -33,7 +33,6 @@ int main() {
 
     printf("Supervisor started. PID: %d\n\n", getpid());
 
-    // Create initial workers
     for (int i = 0; i < NUM_WORKERS; i++) {
 
         workers[i].id = i + 1;
@@ -62,6 +61,10 @@ int main() {
         printf("Worker %d created - PID: %d\n",
                workers[i].id,
                workers[i].pid);
+
+        log_event("STARTED",
+                  workers[i].id,
+                  workers[i].pid);
     }
 
     printf("\nCurrent Worker Status:\n");
@@ -75,7 +78,6 @@ int main() {
 
     printf("\nSupervisor is monitoring the workers...\n\n");
 
-    // Continuously monitor workers
     while (1) {
 
         int status;
@@ -87,7 +89,6 @@ int main() {
             break;
         }
 
-        // Find the worker that terminated
         int worker_index = -1;
 
         for (int i = 0; i < NUM_WORKERS; i++) {
@@ -106,7 +107,6 @@ int main() {
             continue;
         }
 
-        // Mark worker as inactive
         workers[worker_index].active = 0;
 
         printf("\nWorker %d with PID %d terminated.\n",
@@ -115,14 +115,12 @@ int main() {
 
         printf("Failure detected.\n");
 
-        // Log the failure
         log_event("TERMINATED",
                   workers[worker_index].id,
                   terminated_pid);
 
         printf("Failure logged.\n");
 
-        // Create replacement
         printf("Creating replacement for Worker %d...\n",
                workers[worker_index].id);
 
@@ -145,7 +143,6 @@ int main() {
             return 1;
         }
 
-        // Update worker information
         workers[worker_index].pid = replacement_pid;
         workers[worker_index].active = 1;
 
@@ -156,7 +153,6 @@ int main() {
         printf("Worker %d is now RUNNING again.\n",
                workers[worker_index].id);
 
-        // Log the successful restart
         log_event("RESTARTED",
                   workers[worker_index].id,
                   replacement_pid);
