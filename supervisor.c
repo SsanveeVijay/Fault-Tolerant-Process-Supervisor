@@ -3,18 +3,22 @@
 #include <sys/wait.h>
 
 #define NUM_WORKERS 3
+#define MAX_RESTARTS 3
 
-struct Worker {
+struct Worker
+{
     int id;
     pid_t pid;
     int active;
 };
 
-void log_event(const char *message, int worker_id, pid_t pid) {
+void log_event(const char *message, int worker_id, pid_t pid)
+{
 
     FILE *log = fopen("supervisor.log", "a");
 
-    if (log == NULL) {
+    if (log == NULL)
+    {
         perror("Could not open log file");
         return;
     }
@@ -27,25 +31,30 @@ void log_event(const char *message, int worker_id, pid_t pid) {
     fclose(log);
 }
 
-int main() {
+int main()
+{
 
     struct Worker workers[NUM_WORKERS];
+    int restart_count[NUM_WORKERS] = {0};
 
     printf("Supervisor started. PID: %d\n\n", getpid());
 
-    for (int i = 0; i < NUM_WORKERS; i++) {
+    for (int i = 0; i < NUM_WORKERS; i++)
+    {
 
         workers[i].id = i + 1;
         workers[i].active = 0;
 
         pid_t pid = fork();
 
-        if (pid < 0) {
+        if (pid < 0)
+        {
             perror("fork failed");
             return 1;
         }
 
-        if (pid == 0) {
+        if (pid == 0)
+        {
 
             printf("Starting Worker %d...\n", i + 1);
 
@@ -69,7 +78,8 @@ int main() {
 
     printf("\nCurrent Worker Status:\n");
 
-    for (int i = 0; i < NUM_WORKERS; i++) {
+    for (int i = 0; i < NUM_WORKERS; i++)
+    {
 
         printf("Worker %d | PID: %d | Status: RUNNING\n",
                workers[i].id,
@@ -78,28 +88,33 @@ int main() {
 
     printf("\nSupervisor is monitoring the workers...\n\n");
 
-    while (1) {
+    while (1)
+    {
 
         int status;
 
         pid_t terminated_pid = waitpid(-1, &status, 0);
 
-        if (terminated_pid < 0) {
+        if (terminated_pid < 0)
+        {
             perror("waitpid failed");
             break;
         }
 
         int worker_index = -1;
 
-        for (int i = 0; i < NUM_WORKERS; i++) {
+        for (int i = 0; i < NUM_WORKERS; i++)
+        {
 
-            if (workers[i].pid == terminated_pid) {
+            if (workers[i].pid == terminated_pid)
+            {
                 worker_index = i;
                 break;
             }
         }
 
-        if (worker_index == -1) {
+        if (worker_index == -1)
+        {
 
             printf("Unknown worker terminated. PID: %d\n",
                    terminated_pid);
@@ -121,18 +136,34 @@ int main() {
 
         printf("Failure logged.\n");
 
-        printf("Creating replacement for Worker %d...\n",
-               workers[worker_index].id);
+        if (restart_count[worker_index] >= MAX_RESTARTS)
+        {
+            printf("Worker %d reached the maximum restart limit (%d). No further restart attempts.\n",
+                   workers[worker_index].id, MAX_RESTARTS);
+            log_event("RESTART_LIMIT_REACHED",
+                      workers[worker_index].id,
+                      terminated_pid);
+            printf("Worker %d remains stopped; other workers will continue.\n\n",
+                   workers[worker_index].id);
+            continue;
+        }
+
+        printf("Creating replacement for Worker %d (restart %d of %d)...\n",
+               workers[worker_index].id,
+               restart_count[worker_index] + 1,
+               MAX_RESTARTS);
 
         pid_t replacement_pid = fork();
 
-        if (replacement_pid < 0) {
+        if (replacement_pid < 0)
+        {
 
             perror("fork failed while creating replacement");
             continue;
         }
 
-        if (replacement_pid == 0) {
+        if (replacement_pid == 0)
+        {
 
             printf("Starting replacement Worker %d...\n",
                    workers[worker_index].id);
@@ -145,6 +176,7 @@ int main() {
 
         workers[worker_index].pid = replacement_pid;
         workers[worker_index].active = 1;
+        restart_count[worker_index]++;
 
         printf("Replacement Worker %d created - New PID: %d\n",
                workers[worker_index].id,
